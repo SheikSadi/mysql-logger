@@ -3,30 +3,30 @@ from asyncio import get_event_loop
 
 
 class MySQLLogger:
-    def __init__(self, db, sw):
-        """
-        Initialize DB Connection
-        db: dict -> {
-            'user': 'username',
-            'password': 'Pa55w0rd',
-            'host': 'localhost',
-            'port': 3306,
-            'database': 'my_log_db'
-        }
-        sw: str -> Software name to identified (or create) the db table
-        """
-
+    def __init__(
+            self,
+            user,
+            password,
+            host="localhost",
+            port=3306,
+            db="logsDB",
+            table="logs"
+        ):
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.db = db
-        self.sw = sw.replace(' ', '_')
+        self.table = table.replace(' ', '_')
         self.__createTable()
 
     async def __execute(self, loop, query, args=None):
         conn = await async_connect(
-            user = self.db['user'],
-            password = self.db['password'],
-            host = self.db['host'],
-            port = self.db['port'],
-            db = self.db['database'],
+            user = self.user,
+            password = self.password,
+            host = self.host,
+            port = self.port,
+            db = self.db,
             loop = loop
         )
         async with conn.cursor() as cur:
@@ -42,37 +42,41 @@ class MySQLLogger:
         loop.run_until_complete(self.__execute(loop, query, args))
 
     def __createTable(self):
-        query = f'''
-        CREATE TABLE IF NOT EXISTS {self.db["database"]}.{self.sw} (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            level VARCHAR(30),
-            text TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP()
+        query = f"""
+        CREATE TABLE IF NOT EXISTS {self.db}.{self.table} (
+            log_id INT AUTO_INCREMENT PRIMARY KEY,
+            level VARCHAR(10),
+            message TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        '''
+        """
+        self.__asyncRun(query)
+
+        query = f"""
+        CREATE INDEX idx_level ON {self.db}.{self.table}(level);
+        """
         self.__asyncRun(query)
         # loop = get_event_loop()
         # loop.run_until_complete(self.__execute(loop, query))
 
-    def __insert(self, text, level):
+    def __insert(self, message, level):
         query = f'''
-        INSERT INTO {self.db["database"]}.{self.sw} (level, text)
+        INSERT INTO {self.db}.{self.table} (level, message)
         VALUES (%s, %s);
         '''
-        args = (level, text)
+        args = (level, message)
         self.__asyncRun(query, args)
         # loop = get_event_loop()
         # loop.run_until_complete(self.__execute(loop, query, args))
 
-    def info(self, text):
-        self.__insert(text, 'info')
+    def info(self, message):
+        self.__insert(message, 'info')
 
-    def debug(self, text):
-        self.__insert(text, 'debug')
+    def debug(self, message):
+        self.__insert(message, 'debug')
 
-    def error(self, text):
-        self.__insert(text, 'error')
+    def error(self, message):
+        self.__insert(message, 'error')
 
-    def warning(self, text):
-        self.__insert(text, 'warning')
-
+    def warning(self, message):
+        self.__insert(message, 'warning')
